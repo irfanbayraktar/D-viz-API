@@ -73,3 +73,30 @@
   opacity: 0.7 !important;
 }
 
+.buttons{
+  padding: 10px !important;
+}
+
+
+@keyframes price-blink-animation {
+  0% {
+    color: inherit;
+  }
+  50% {
+    color: transparent;
+  }
+  100% {
+    color: inherit;
+  }
+}
+
+.price-change {
+  animation-name: price-blink-animation;
+  animation-duration: 0.5s;
+  animation-iteration-count: 1;
+}
+
+
+
+
+

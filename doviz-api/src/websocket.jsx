@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import CanvasJSReact from '@canvasjs/react-charts';
-import Graphcontent from './Graph'
+import { Card, CardBody, CardSubtitle, CardTitle } from 'reactstrap';
+import ApexCharts from 'apexcharts';
 
 const WebSocketExample = () => {
-  const CanvasJSChart = CanvasJSReact.CanvasJSChart;
-
   const WS_ADDRESS = 'wss://socket.paratic.com/v2/?EIO=4&transport=websocket';
   const WS_USD_TRY_MESSAGE = '42["joinStream", {"codes": ["USD/TRL"]}]';
   const WS_EUR_TRY_MESSAGE = '42["joinStream", {"codes": ["EUR/TRL"]}]';
   const WS_RUB_TRY_MESSAGE = '42["joinStream", {"codes": ["RUB/TRL"]}]';
   const WS_CAD_TRY_MESSAGE = '42["joinStream", {"codes": ["CAD/TRL"]}]';
 
-  const [spotPariteler, setSpotPariteler] = useState([]);
-  const [dataPoints, setDataPoints] = useState([]);
+  const [spotPariteler, setSpotPariteler] = useState({
+    'USD/TRL': { buyPrices: [], sellPrices: [] },
+    'EUR/TRL': { buyPrices: [], sellPrices: [] },
+    'RUB/TRL': { buyPrices: [], sellPrices: [] },
+    'CAD/TRL': { buyPrices: [], sellPrices: [] },
+  });
+  const [selectedCurrency, setSelectedCurrency] = useState(null);
+  const [chart, setChart] = useState(null);
+  const [priceChange, setPriceChange] = useState(false);
 
   useEffect(() => {
     const ws = new WebSocket(WS_ADDRESS);
@@ -34,35 +39,24 @@ const WebSocketExample = () => {
         const [sellPrice, buyPrice] = priceData.split('|').slice(0, 2);
 
         if (sellPrice !== '' && buyPrice !== '') {
-          setSpotPariteler(prevSpotPariteler => {
-            const existingItem = prevSpotPariteler.find(item => item.name === name);
+          setSpotPariteler((prevSpotPariteler) => {
+            const prevBuyPrice = prevSpotPariteler[name].buyPrices[prevSpotPariteler[name].buyPrices.length - 1];
+            const prevSellPrice = prevSpotPariteler[name].sellPrices[prevSpotPariteler[name].sellPrices.length - 1];
 
-            if (existingItem) {
-              return prevSpotPariteler.map(item => {
-                if (item.name === name) {
-                  return { ...item, sellPrice, buyPrice, show: true };
-                }
-                return item;
-              });
-            } else {
-              return [...prevSpotPariteler, { name, sellPrice, buyPrice, show: true }];
-            }
-          });
+            const updatedSpotPariteler = {
+              ...prevSpotPariteler,
+              [name]: {
+                buyPrices: [...prevSpotPariteler[name].buyPrices, parseFloat(buyPrice)],
+                sellPrices: [...prevSpotPariteler[name].sellPrices, parseFloat(sellPrice)],
+              },
+            };
 
-          setDataPoints(prevDataPoints => {
-            const newDataPoints = [...prevDataPoints];
-            const newDataPoint = { x: name, y: parseFloat(buyPrice) };
-            const existingDataPointIndex = newDataPoints.findIndex(dataPoint => dataPoint.x === name);
-
-            if (existingDataPointIndex !== -1) {
-              // Veri noktası zaten varsa güncelle
-              newDataPoints[existingDataPointIndex] = newDataPoint;
-            } else {
-              // Yeni veri noktasını ekle
-              newDataPoints.push(newDataPoint);
+            if (parseFloat(buyPrice) > prevBuyPrice || parseFloat(sellPrice) > prevSellPrice) {
+              setPriceChange(true);
+              setTimeout(() => setPriceChange(false), 500);
             }
 
-            return newDataPoints;
+            return updatedSpotPariteler;
           });
         }
       }
@@ -75,30 +69,134 @@ const WebSocketExample = () => {
     };
   }, []);
 
-  const chartData = [
-    {
-      name: 'Dolar',
-      data: dataPoints,
-    },
-  ];
-
-  const chartOptions = {
-    // ... diğer grafik seçenekleri
+  const handleCurrencyClick = (currency) => {
+    setSelectedCurrency(currency);
   };
+
+  const getPriceChangeIndicator = (prices, direction) => {
+    if (prices.length < 2) {
+      return null;
+    }
+
+    const currentPrice = prices[prices.length - 1];
+    const previousPrice = prices[prices.length - 2];
+
+    if (currentPrice > previousPrice && direction === 'up') {
+      return <span className="arrow up">&#8593;</span>;
+    } else if (currentPrice < previousPrice && direction === 'down') {
+      return <span className="arrow down">&#8595;</span>;
+    } else {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (selectedCurrency) {
+      const chartData = {
+        series: [
+          { name: 'Alış Fiyatı', data: spotPariteler[selectedCurrency].buyPrices },
+          { name: 'Satış Fiyatı', data: spotPariteler[selectedCurrency].sellPrices },
+        ],
+        xaxis: {
+          categories: spotPariteler[selectedCurrency].buyPrices.map((_, index) => index + 1),
+        },
+      };
+
+      const options = {
+        chart: {
+          type: 'line',
+          height: 390,
+        },
+        series: chartData.series,
+        xaxis: chartData.xaxis,
+        yaxis: {
+          labels: {
+            formatter: function (value) {
+              return value.toFixed(2);
+            },
+          },
+        },
+        title: {
+          text: `Parite: ${selectedCurrency}`,
+          align: 'center',
+          style: {
+            fontSize: '20px',
+            fontWeight: 'bold',
+          },
+        },
+      };
+
+      if (chart) {
+        chart.updateSeries(chartData.series);
+        chart.updateOptions(options);
+      } else {
+        const chartElement = document.getElementById('chart');
+
+        if (chartElement) {
+          const newChart = new ApexCharts(chartElement, options);
+          newChart.render();
+          setChart(newChart);
+        }
+      }
+    }
+  }, [selectedCurrency, spotPariteler]);
+
+  useEffect(() => {
+    let interval;
+
+    if (selectedCurrency) {
+      interval = setInterval(() => {
+        ws.send('3');
+      }, 5000);
+    }
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [selectedCurrency]);
 
   return (
     <div>
       <h1>Spot Pariteler</h1>
 
+      <div className="buttons">
+        <button onClick={() => handleCurrencyClick('USD/TRL')}>USD/TRL</button>
+        <button onClick={() => handleCurrencyClick('EUR/TRL')}>EUR/TRL</button>
+        <button onClick={() => handleCurrencyClick('RUB/TRL')}>RUB/TRL</button>
+        <button onClick={() => handleCurrencyClick('CAD/TRL')}>CAD/TRL</button>
+      </div>
+
       <div className="spot-list">
-        {spotPariteler.map(item => (
-          <div className="item" key={item.name}>
-            <p>{item.name} - Alış: {item.buyPrice}, Satış: {item.sellPrice}</p>
+        {Object.entries(spotPariteler).map(([name, item]) => (
+          <div className="item" key={name}>
+            <p>{name}</p>
+            <p>
+                Alış: <span className={`buy-price ${priceChange ? 'price-change' : ''}`}>{item.buyPrices[item.buyPrices.length - 1]}</span> <br />
+               Satış: <span className={`sell-price ${priceChange ? 'price-change' : ''}`}>{item.sellPrices[item.sellPrices.length - 1]}</span>
+            </p>
+
+
+
+
+
+
           </div>
         ))}
       </div>
 
-      <Graphcontent data={chartData} options={chartOptions} />
+      <div className="container_charts">
+        {selectedCurrency && (
+          <Card>
+            <CardBody>
+              <CardTitle tag="h5">Sales Summary</CardTitle>
+              <CardSubtitle className="text-muted" tag="h6">
+                Yearly Sales Report
+              </CardSubtitle>
+              <div id="chart"></div>
+            </CardBody>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };
