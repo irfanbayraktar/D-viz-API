@@ -2,18 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardBody, CardSubtitle, CardTitle } from 'reactstrap';
 import ApexCharts from 'apexcharts';
 
-const WebSocketExample = () => {
+const HisseSenedi = () => {
   const WS_ADDRESS = 'wss://socket.paratic.com/v2/?EIO=4&transport=websocket';
-  const WS_USD_TRY_MESSAGE = '42["joinStream", {"codes": ["USD/TRL"]}]';
-  const WS_EUR_TRY_MESSAGE = '42["joinStream", {"codes": ["EUR/TRL"]}]';
-  const WS_RUB_TRY_MESSAGE = '42["joinStream", {"codes": ["RUB/TRL"]}]';
-  const WS_CAD_TRY_MESSAGE = '42["joinStream", {"codes": ["CAD/TRL"]}]';
+  const WS_XU100_MESSAGE = '42["joinStream", {"codes": ["XU100"]}]';
+  const WS_XU050_MESSAGE = '42["joinStream", {"codes": ["XU050"]}]';
+  const WS_XU030_MESSAGE = '42["joinStream", {"codes": ["XU030"]}]';
 
   const [spotPariteler, setSpotPariteler] = useState({
-    'USD/TRL': { buyPrices: [], sellPrices: [] },
-    'EUR/TRL': { buyPrices: [], sellPrices: [] },
-    'RUB/TRL': { buyPrices: [], sellPrices: [] },
-    'CAD/TRL': { buyPrices: [], sellPrices: [] },
+    'XU100': { buyPrices: [], sellPrices: [] },
+    'XU050': { buyPrices: [], sellPrices: [] },
+    'XU030': { buyPrices: [], sellPrices: [] },
   });
   const [selectedCurrency, setSelectedCurrency] = useState(null);
   const [chart, setChart] = useState(null);
@@ -24,19 +22,21 @@ const WebSocketExample = () => {
 
     ws.onopen = () => {
       ws.send('40');
-      ws.send(WS_USD_TRY_MESSAGE);
-      ws.send(WS_EUR_TRY_MESSAGE);
-      ws.send(WS_RUB_TRY_MESSAGE);
-      ws.send(WS_CAD_TRY_MESSAGE);
+      ws.send(WS_XU100_MESSAGE);
+      ws.send(WS_XU050_MESSAGE);
+      ws.send(WS_XU030_MESSAGE);
     };
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data.substring(event.data.indexOf('[')));
 
-      if (data[0] === 'spot_pariteler') {
+      if (data[0] === 'hisse_senetleri') {
         const spotData = JSON.parse(data[1].replace(/\\/g, ''));
         const [name, priceData] = Object.entries(spotData)[0];
-        const [sellPrice, buyPrice] = priceData.split('|').slice(0, 2);
+        //const [sellPrice, buyPrice] = priceData.split('|').slice(0, 2);
+        const [sellPrice, buyPrice] = priceData.split('|').find((price) => price.trim() !== '').split('||');
+
+
 
         if (sellPrice !== '' && buyPrice !== '') {
           setSpotPariteler((prevSpotPariteler) => {
@@ -50,6 +50,9 @@ const WebSocketExample = () => {
                 sellPrices: [...prevSpotPariteler[name].sellPrices, parseFloat(sellPrice)],
               },
             };
+            console.log(name)
+            console.log(buyPrice);
+            console.log(sellPrice);
 
             if (parseFloat(buyPrice) > prevBuyPrice || parseFloat(sellPrice) > prevSellPrice) {
               setPriceChange(true);
@@ -155,24 +158,36 @@ const WebSocketExample = () => {
     };
   }, [selectedCurrency]);
 
+  const getBISTCode = (name) => {
+    switch (name) {
+      case 'XU100':
+        return 'BIST100';
+      case 'XU050':
+        return 'BIST50';
+      case 'XU030':
+        return 'BIST30';
+      default:
+        return '';
+    };
+}
+
   return (
     <div>
-      <h1>Spot Pariteler</h1>
+      <h1>Hisse Senedi</h1>
 
       <div className="buttons">
-        <button onClick={() => handleCurrencyClick('USD/TRL')}>USD/TRL</button>
-        <button onClick={() => handleCurrencyClick('EUR/TRL')}>EUR/TRL</button>
-        <button onClick={() => handleCurrencyClick('RUB/TRL')}>RUB/TRL</button>
-        <button onClick={() => handleCurrencyClick('CAD/TRL')}>CAD/TRL</button>
+        <button onClick={() => handleCurrencyClick('XU100')}>BIST100</button>
+        <button onClick={() => handleCurrencyClick('XU050')}>BIST50</button>
+        <button onClick={() => handleCurrencyClick('XU030')}>BIST30</button>
       </div>
 
       <div className="spot-list">
         {Object.entries(spotPariteler).map(([name, item]) => (
           <div className="item" key={name}>
-            <p>{name}</p>
+            <p>{getBISTCode(name)}</p>
             <p>
-                Alış: <span className={`buy-price ${priceChange ? 'price-change' : ''}`}>{item.buyPrices[item.buyPrices.length - 1]}</span> <br />
-               Satış: <span className={`sell-price ${priceChange ? 'price-change' : ''}`}>{item.sellPrices[item.sellPrices.length - 1]}</span>
+            
+               Değer: <span className={`sell-price ${priceChange ? 'price-change' : ''}`}>{item.sellPrices[item.sellPrices.length - 1]}</span>
             </p>
           </div>
         ))}
@@ -195,4 +210,4 @@ const WebSocketExample = () => {
   );
 };
 
-export default WebSocketExample;
+export default HisseSenedi;
